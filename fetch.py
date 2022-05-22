@@ -2,7 +2,7 @@
 import json
 import operator
 import os
-import re
+import time
 from copy import deepcopy
 from functools import reduce
 from urllib.parse import urljoin
@@ -17,6 +17,10 @@ _CONFIG_EXT = ".toml"
 _SECRET_EXT = ".secrets"
 _RESULT_DIR = "data"
 _RESULT_EXT = ".json"
+_MAXAGE_DEF = 86400
+
+# Magic keys
+_MAXAGE_KEY = "maxage"
 
 # Magic strings
 _MAGIC_JQ = "!jq"
@@ -86,7 +90,6 @@ def init():
 # Fetch API endpoint
 def fetch(name, api, action):
     global data
-    # TODO check if data is already cached
 
     # Construct request
     request = {"url": urljoin(api["base"], action["endpoint"])}
@@ -110,19 +113,48 @@ def fetch(name, api, action):
     return data[name]
 
 
+# Retrieve API endpoint data from cache
+def restore(name, cachefile):
+    global data
+
+    with open(cachefile, "r") as fd:
+        data[name] = json.load(fd)
+    return data[name]
+
+
 # Run
 def main():
     for name, unit in init():
-        for action_id in unit["api"]["flow"]:
+        actions = unit["api"]["flow"]
+        data_dir = os.path.join(_RESULT_DIR, name)
+
+        for idx, action_id in enumerate(actions):
             action = unit["action"][action_id]
+            outfile = os.path.join(data_dir, f"{action_id}{_RESULT_EXT}")
+
+            # Check for cached results for this endpoint
+            max_age = action[_MAXAGE_KEY] if _MAXAGE_KEY in action else _MAXAGE_DEF
+            if os.path.isfile(outfile):
+                cache_age = time.time() - os.path.getmtime(outfile)
+                if cache_age <= max_age:
+                    if idx == len(actions):
+                        continue  # move on directly if this is the last action
+
+                    print(f"Restore {name}: {action_id} ({cache_age}/{max_age})")
+                    response = restore(action_id, outfile)
+                    continue
+                else:
+                    print(f"Outdated {name}: {action_id} ({cache_age}/{max_age})")
+
+            # If we didn't continue with a valid cache above, create one
+            print(f"Fetch {name}: {action_id}")
             response = fetch(action_id, unit["api"], action)
 
             # Save results as a static json file
-            data_dir = os.path.join(_RESULT_DIR, name)
             if not os.path.exists(data_dir):
                 os.makedirs(data_dir)
-            with open(os.path.join(data_dir, f"{action_id}{_RESULT_EXT}"), "w") as fd:
-                print(f"{name}: {action_id}")
+            with open(outfile, "w") as fd:
+                print(f"Cache {name}: {action_id}")
                 json.dump(response, fd, indent=4, sort_keys=True)
 
 
