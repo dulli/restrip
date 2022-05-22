@@ -1,0 +1,7 @@
+[api]
+base = "https://mcd-mobileapp-prod.azureedge.net/json/de/"
+flow = ["coupons"]
+
+[action.coupons]
+endpoint = "coupons.json"
+method = "get"

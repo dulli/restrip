@@ -1,0 +1,14 @@
+[api]
+base = "https://mobile.kptncook.com/"
+params = {kptnkey = "!secret kptncook.apikey"}
+flow = ["login", "recipes"]
+
+[action.login]
+endpoint = "login/userpass"
+method = "post"
+json = {email = "!secret kptncook.email", password = "!secret kptncook.password"}
+
+[action.recipes]
+endpoint = "recipes/search"
+method = "post"
+json = "!jq .login.favorites[] | {\"identifier\" : .}"

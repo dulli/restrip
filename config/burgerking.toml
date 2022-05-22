@@ -1,0 +1,7 @@
+[api]
+base = "https://mo.burgerking-app.eu/api/v2/"
+flow = ["coupons"]
+
+[action.coupons]
+endpoint = "coupons"
+method = "get"
