@@ -1,7 +1,7 @@
 [api]
 base = "https://www.hellofresh.de/gw/"
 params = {locale = "de-DE", country = "de"}
-flow = ["token", "weekly"]
+flow = ["token", "recipes"]
 
 [action.token]
 endpoint = "auth/token"
@@ -13,4 +13,11 @@ maxage = 2592000
 endpoint = "menus-service/menus"
 method = "get"
 headers = {Authorization = "!jq (.token.token_type + \" \" + .token.access_token)"}
-params = {product = "classic-box", week = "2022-W22"}
+params = {product = "classic-box", week = "2022-W22"} # TODO: make the week dynamic
+
+[action.recipes]
+endpoint = "api/recipes"
+method = "get"
+headers = {Authorization = "!jq (.token.token_type + \" \" + .token.access_token)"}
+params = {take = 250}
+paginate = {param = "skip", increment = "!jq .recipes.count", max = "!jq .recipes.total", merge = "items"}

@@ -124,18 +124,43 @@ def fetch(name, api, action):
     if "json" in action:
         request["json"] = action["json"]
 
-    # Run pre-processing steps
-    request = prepare(request)
+    page_index = 0
+    while True:
+        # Run pre-processing steps
+        request = prepare(request)
 
-    # Send request
-    if action["method"] == "post":
-        response = httpx.post(**request)
-    else:
-        response = httpx.get(**request)
+        # Send request
+        if action["method"] == "post":
+            response = httpx.post(**request)
+        else:
+            response = httpx.get(**request)
 
-    # Handle response
-    response.raise_for_status()
-    data[name] = response.json()
+        # Handle response
+        response.raise_for_status()  # TODO error handling
+        result = response.json()
+
+        # Handle pagination
+        if page_index == 0:
+            data[name] = result
+        if "paginate" not in action:
+            break
+        else:
+            pagination = prepare(action["paginate"])
+            print(pagination)
+
+            if page_index > 0:
+                merge = pagination["merge"]
+                result[merge] = data[name][merge] + result[merge]
+                data[name].update(result)
+            if "increment" in pagination:
+                page_index = page_index + pagination["increment"]
+            else:
+                page_index = page_index + 1
+            if page_index >= pagination["max"]:
+                break
+            request["params"][pagination["param"]] = page_index
+            print(f"Pagination: {page_index}/{pagination['max']}")
+
     return data[name]
 
 
