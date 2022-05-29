@@ -3,6 +3,7 @@ import json
 import operator
 import os
 import time
+from collections import defaultdict
 from copy import deepcopy
 from functools import reduce
 from urllib.parse import urljoin
@@ -76,12 +77,28 @@ def reveal(unit, secrets):
     return revealed
 
 
+def prepare(request):
+    def eval_jq(v):
+        if isinstance(v, str) and v.startswith(_MAGIC_JQ):
+            v = jq.all(v[len(_MAGIC_JQ) :].strip(), data)
+            if len(v) == 1:
+                return v[0]
+            return v
+        return v
+
+    prepared = deepcopy(request)
+    map_nested(prepared, eval_jq)
+    return prepared
+
+
 # Load configured units
-def init():
+def init(targets=[]):
     secrets = load_secrets()
-    for filename in os.listdir(_CONFIG_DIR):
+    for filename in targets or os.listdir(_CONFIG_DIR):
         if filename.endswith(_CONFIG_EXT) and _SECRET_EXT not in filename:
             filepath = os.path.join(_CONFIG_DIR, filename)
+            if not os.path.isfile(filepath):
+                continue
             unitname = filename.replace(_CONFIG_EXT, "")
             unitdata = load_unit(filepath)
             yield unitname, reveal(unitdata, secrets)
@@ -92,18 +109,27 @@ def fetch(name, api, action):
     global data
 
     # Construct request
-    request = {"url": urljoin(api["base"], action["endpoint"])}
+    request = defaultdict(dict)
+    request["url"] = urljoin(api["base"], action["endpoint"])
     if "params" in api:
         request["params"] = api["params"]
     if "headers" in api:
         request["headers"] = api["headers"]
 
+    if "params" in action:
+        request["params"].update(action["params"])
+    if "headers" in action:
+        request["headers"].update(action["headers"])
+
+    if "json" in action:
+        request["json"] = action["json"]
+
+    # Run pre-processing steps
+    request = prepare(request)
+
     # Send request
     if action["method"] == "post":
-        # TODO refactor preprocessing into own function, apply also to params and headers
-        if isinstance(action["json"], str) and action["json"].startswith(_MAGIC_JQ):
-            action["json"] = jq.all(action["json"][len(_MAGIC_JQ) :].strip(), data)
-        response = httpx.post(json=action["json"], **request)
+        response = httpx.post(**request)
     else:
         response = httpx.get(**request)
 
@@ -123,8 +149,9 @@ def restore(name, cachefile):
 
 
 # Run
-def main():
-    for name, unit in init():
+def run(args):
+    args = [f"{target}.toml" for target in args] if args else []
+    for name, unit in init(args):
         actions = unit["api"]["flow"]
         data_dir = os.path.join(_RESULT_DIR, name)
 
@@ -159,4 +186,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+
+    run(sys.argv[1:])

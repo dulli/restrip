@@ -1,0 +1,16 @@
+[api]
+base = "https://www.hellofresh.de/gw/"
+params = {locale = "de-DE", country = "de"}
+flow = ["token", "weekly"]
+
+[action.token]
+endpoint = "auth/token"
+method = "post"
+params = {scope = "public", grant_type = "client_credentials", client_id="senf"}
+maxage = 2592000
+
+[action.weekly]
+endpoint = "menus-service/menus"
+method = "get"
+headers = {Authorization = "!jq (.token.token_type + \" \" + .token.access_token)"}
+params = {product = "classic-box", week = "2022-W22"}
