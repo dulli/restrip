@@ -200,7 +200,11 @@ def run(args):
 
             # If we didn't continue with a valid cache above, create one
             print(f"Fetch {name}: {action_id}")
-            response = fetch(action_id, unit["api"], action)
+            try:
+                response = fetch(action_id, unit["api"], action)
+            except httpx.HTTPError as exc:
+                print(f"Failed to fetch {name}: {action_id} ({exc})")
+                break
 
             # Save results as a static json file
             if not os.path.exists(data_dir):
